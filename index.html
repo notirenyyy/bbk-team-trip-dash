@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bangkok Team Trip Interactive Planner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#f5f5f2;--ink:#19211f;--muted:#6d7471;--panel:#fff;--line:#dde2df;--accent:#0f766e}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
+header{max-width:1600px;margin:auto;padding:26px 28px 16px} .eyebrow{font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:clamp(30px,4vw,54px);letter-spacing:-.04em;margin:5px 0} .lead{color:var(--muted);max-width:900px;line-height:1.55}
+.tabs{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px} .tab{border:1px solid var(--line);background:white;padding:10px 15px;border-radius:999px;font-weight:800;cursor:pointer}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.layout{max-width:1600px;margin:auto;padding:0 28px 32px;display:grid;grid-template-columns:minmax(390px,520px) 1fr;gap:18px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 12px 32px rgba(25,40,35,.06);overflow:hidden}
+.left{height:calc(100vh - 175px);min-height:680px;display:flex;flex-direction:column}
+.left-head{padding:18px 18px 12px;border-bottom:1px solid var(--line)} .left-head h2{margin:0;font-size:22px} .left-head p{margin:5px 0 0;color:var(--muted);font-size:14px}
+.timeline{overflow:auto;padding:10px}
+.stop{display:grid;grid-template-columns:72px 32px 1fr;gap:8px;padding:10px 8px;border-radius:15px;cursor:pointer;transition:.15s}
+.stop:hover,.stop.active{background:#f0f5f3} .time{font-size:12px;color:var(--muted);font-weight:900;padding-top:6px}
+.dot{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:white;font-size:12px;font-weight:900;position:relative}
+.stop:not(:last-child) .dot:after{content:"";position:absolute;left:13px;top:28px;bottom:-24px;width:2px;background:#dde5e2}
+.stop h3{font-size:15px;margin:3px 0 4px} .stop p{font-size:13px;color:var(--muted);line-height:1.35;margin:0}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px} .badge{font-size:11px;background:#f3f4f3;border:1px solid #e3e6e4;padding:4px 7px;border-radius:999px}
+.map-panel{height:calc(100vh - 175px);min-height:680px;position:relative} #map{width:100%;height:100%}
+.map-top-card{position:absolute;z-index:500;top:14px;right:14px;width:min(330px,calc(100% - 28px));background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:17px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+.place-photo{width:100%;height:155px;object-fit:cover;background:#e9eeeb} .card-body{padding:12px 14px 14px} .card-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:900;color:var(--accent)}
+.card-title{font-size:18px;font-weight:900;margin:3px 0} .card-desc{font-size:13px;line-height:1.45;color:var(--muted);margin-bottom:8px} .card-price{font-size:12px;font-weight:800}
+.card-link{display:inline-block;margin-top:9px;font-size:12px;font-weight:900;color:var(--accent);text-decoration:none}
+.route-chip{position:absolute;z-index:500;bottom:14px;left:14px;background:rgba(255,255,255,.95);padding:10px 12px;border-radius:14px;border:1px solid var(--line);font-size:12px;box-shadow:0 8px 25px rgba(0,0,0,.08)}
+.num-icon{background:var(--accent);border:3px solid white;color:#fff;width:31px;height:31px;border-radius:50%;display:grid;place-items:center;font-weight:900;box-shadow:0 2px 9px rgba(0,0,0,.3)} .leaflet-div-icon{background:transparent;border:none}
+@media(max-width:920px){header{padding:20px 15px 12px}.layout{grid-template-columns:1fr;padding:0 14px 22px}.left{height:auto;min-height:0}.timeline{max-height:none}.map-panel{height:64vh;min-height:500px}.map-top-card{width:280px}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">Bangkok Team Trip • 10–15 colleagues</div>
+<h1>Interactive itinerary + route map</h1>
+<div class="lead">The full route is visible as soon as you open each tab. Click a timestamped itinerary item to zoom into that stop and update the photo card on the map. Use “Open in Google Maps” for exact navigation.</div>
+<div class="tabs" id="tabs"></div>
+</header>
+
+<main class="layout">
+<section class="panel left">
+  <div class="left-head"><h2 id="dayTitle"></h2><p id="daySub"></p></div>
+  <div class="timeline" id="timeline"></div>
+</section>
+<section class="panel map-panel">
+  <div id="map"></div>
+  <div class="map-top-card" id="placeCard">
+    <img class="place-photo" id="placePhoto" alt="">
+    <div class="card-body">
+      <div class="card-kicker" id="placeCategory">Route overview</div>
+      <div class="card-title" id="placeTitle">Select a stop</div>
+      <div class="card-desc" id="placeDesc">Click any itinerary item to zoom into it.</div>
+      <div class="card-price" id="placePrice"></div>
+      <a class="card-link" id="placeLink" target="_blank" rel="noopener">Open in Google Maps ↗</a>
+    </div>
+  </div>
+  <div class="route-chip"><strong>Full route shown</strong><br>Dashed line = itinerary order</div>
+</section>
+</main>
+
+<script>
+const DAYS={"dry": {"label": "☀️ Dry Plan", "subtitle": "Bangkok team day • cooking + sunset cruise + Muay Thai", "theme": "#0f766e", "stops": [{"time": "08:30", "title": "Avani+ Riverside Bangkok", "desc": "Check out and begin hotel shift.", "lat": 13.704989, "lng": 100.491211, "category": "Hotel", "price": "—", "photo": "https://www.nimotour.com/upfiles/product/1055914523.jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Avani%2B+Riverside+Bangkok"}, {"time": "09:00", "title": "Bedtime Storeys", "desc": "Drop luggage before starting the team day.", "lat": 13.7168, "lng": 100.5008, "category": "Hotel", "price": "~฿50–100 / S$2–4 transport share", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Bedtime+Storeys+574+Charoen+Rat+Road+Bangkok"}, {"time": "09:15–10:00", "title": "Bru-sembly", "desc": "Breakfast + team briefing. Contact ahead for seating for 10–15.", "lat": 13.7195, "lng": 100.5036, "category": "Breakfast", "price": "฿200–400 / S$8–15 pp", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Bru-sembly+Bangkok"}, {"time": "10:30–14:00", "title": "Go! Thai Cooking School", "desc": "Team cook-off with chef coaching. Strong fit for a 10–15 person corporate group.", "lat": 13.719, "lng": 100.5155, "category": "Team Activity", "price": "Group quote required", "photo": "https://excursionmania.com/cdn-cgi/image/quality%3D75%2Cformat%3Dwebp%2Cw%3Dauto%2Ch%3Dauto%2Cfit%3Dscale-down%2Ctrim%3Dborder/https%3A/excursionmania.com/uploads/blog/gallery/963/1736590826.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Go+Thai+Cooking+School+Bangkok"}, {"time": "14:15–15:15", "title": "Bang Rak / Charoen Krung", "desc": "Light MICHELIN lunch or coffee after the cooking class.", "lat": 13.7227, "lng": 100.5146, "category": "Food", "price": "Target ≤฿750 / ≤S$29 pp", "photo": "https://excursionmania.com/cdn-cgi/image/quality%3D75%2Cformat%3Dwebp%2Cw%3Dauto%2Ch%3Dauto%2Cfit%3Dscale-down%2Ctrim%3Dborder/https%3A/excursionmania.com/uploads/blog/gallery/963/1736590826.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Michelin+restaurant+Bang+Rak+Bangkok"}, {"time": "15:15–16:00", "title": "Bedtime Storeys", "desc": "Quick freshen-up before the evening.", "lat": 13.7168, "lng": 100.5008, "category": "Break", "price": "—", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Bedtime+Storeys+574+Charoen+Rat+Road+Bangkok"}, {"time": "16:30", "title": "ICONSIAM Pier", "desc": "Arrive early and check in for the sunset cruise.", "lat": 13.7266, "lng": 100.5102, "category": "Transfer", "price": "—", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=ICONSIAM+Pier+Bangkok"}, {"time": "16:45–18:30", "title": "Chao Phraya Sunset Cruise", "desc": "Golden-hour river views, team photos and sightseeing.", "lat": 13.735, "lng": 100.506, "category": "Team Activity", "price": "~฿400–1,400 / S$15–54 pp", "photo": "https://www.greenmindtravel.com/cdn/shop/files/Enchanting_Bangkok_Sunset_River_Cruise__A_Golden_Hour_Delight.jpg?v=1765309482", "maps": "https://www.google.com/maps/search/?api=1&query=Chao+Phraya+Sunset+Cruise+ICONSIAM"}, {"time": "19:00–22:00", "title": "Rajadamnern Stadium", "desc": "Watch live Muay Thai together as the evening show.", "lat": 13.7602, "lng": 100.5087, "category": "Show", "price": "Event / seat dependent", "photo": "https://visualthailand.com/wp-content/uploads/2023/11/Stadium-650.png", "maps": "https://www.google.com/maps/search/?api=1&query=Rajadamnern+Stadium+Bangkok"}, {"time": "22:30", "title": "Bedtime Storeys", "desc": "Return to accommodation.", "lat": 13.7168, "lng": 100.5008, "category": "Hotel", "price": "—", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Bedtime+Storeys+574+Charoen+Rat+Road+Bangkok"}]}, "wet": {"label": "🌧️ Wet Weather", "subtitle": "Indoor-focused version • escape room + cooking/craft alternatives", "theme": "#2563eb", "stops": [{"time": "08:30", "title": "Bedtime Storeys", "desc": "Drop luggage.", "lat": 13.7168, "lng": 100.5008, "category": "Hotel", "price": "—", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Bedtime+Storeys+574+Charoen+Rat+Road+Bangkok"}, {"time": "09:00–10:00", "title": "Bru-sembly", "desc": "Breakfast + team briefing.", "lat": 13.7195, "lng": 100.5036, "category": "Breakfast", "price": "฿200–400 / S$8–15 pp", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Bru-sembly+Bangkok"}, {"time": "10:30–12:00", "title": "Escape Room Thailand — MBK", "desc": "Split 10–15 colleagues into smaller competing teams.", "lat": 13.7445, "lng": 100.53, "category": "Team Activity", "price": "Group rate TBC", "photo": "https://excursionmania.com/cdn-cgi/image/quality%3D75%2Cformat%3Dwebp%2Cw%3Dauto%2Ch%3Dauto%2Cfit%3Dscale-down%2Ctrim%3Dborder/https%3A/excursionmania.com/uploads/blog/gallery/963/1736590826.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Escape+Room+Thailand+MBK+Bangkok"}, {"time": "12:30–14:00", "title": "MICHELIN / Bib Gourmand Lunch", "desc": "Indoor restaurant lunch; keep meal within team budget.", "lat": 13.756, "lng": 100.525, "category": "Food", "price": "Target ≤฿750 / ≤S$29 pp", "photo": "https://excursionmania.com/cdn-cgi/image/quality%3D75%2Cformat%3Dwebp%2Cw%3Dauto%2Ch%3Dauto%2Cfit%3Dscale-down%2Ctrim%3Dborder/https%3A/excursionmania.com/uploads/blog/gallery/963/1736590826.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Michelin+Bib+Gourmand+Bangkok"}, {"time": "14:30–17:00", "title": "Pottery / Thai Craft Workshop", "desc": "Private creative session for the whole group.", "lat": 13.691, "lng": 100.605, "category": "Team Activity", "price": "Private quote TBC", "photo": "https://excursionmania.com/cdn-cgi/image/quality%3D75%2Cformat%3Dwebp%2Cw%3Dauto%2Ch%3Dauto%2Cfit%3Dscale-down%2Ctrim%3Dborder/https%3A/excursionmania.com/uploads/blog/gallery/963/1736590826.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Aromdee+Art+Studio+Bangkok"}, {"time": "18:30–20:15", "title": "Charmgang", "desc": "MICHELIN Guide dinner; share à la carte dishes.", "lat": 13.735, "lng": 100.5138, "category": "Dinner", "price": "Aim ฿600–750 / S$23–29 pp", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Charmgang+Bangkok"}, {"time": "20:30–22:00", "title": "Indoor Night Activity", "desc": "Dessert, live performance or riverside lounge atmosphere.", "lat": 13.7255, "lng": 100.512, "category": "Evening", "price": "~฿200–500 / S$8–19", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Charoenkrung+Bangkok+live+music"}]}, "daytrip": {"label": "🛕 Day Trip", "subtitle": "Sunday checkout • Ayutthaya full-day escape", "theme": "#b45309", "stops": [{"time": "08:00", "title": "Bedtime Storeys", "desc": "Check out and load luggage into the private van.", "lat": 13.7168, "lng": 100.5008, "category": "Start", "price": "Private van quote TBC", "photo": "https://image.kkday.com/v2/image/get/c_fill%2Cq_55%2Ct_webp%2Cw_960/s1.kkday.com/product_147138/20230717111731_rC4pk/jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Bedtime+Storeys+574+Charoen+Rat+Road+Bangkok"}, {"time": "10:00–11:00", "title": "Wat Mahathat", "desc": "Historic temple ruins + group photo challenge.", "lat": 14.3567, "lng": 100.5684, "category": "Sightseeing", "price": "~฿50 entry", "photo": "https://media.triple.guide/triple-cms/c_limit%2Cf_auto%2Ch_1024%2Cw_1024/94439af8-7a95-43aa-8f27-0e5582799b13.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Wat+Mahathat+Ayutthaya"}, {"time": "11:10–12:00", "title": "Wat Phra Si Sanphet", "desc": "Explore the former royal temple precinct.", "lat": 14.3558, "lng": 100.5585, "category": "Sightseeing", "price": "~฿50 entry", "photo": "https://media.triple.guide/triple-cms/c_limit%2Cf_auto%2Ch_1024%2Cw_1024/94439af8-7a95-43aa-8f27-0e5582799b13.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Wat+Phra+Si+Sanphet+Ayutthaya"}, {"time": "12:15–13:30", "title": "Ayutthaya Riverside Lunch", "desc": "Shared Thai lunch by the river.", "lat": 14.3515, "lng": 100.5695, "category": "Lunch", "price": "Target ≤฿750 / ≤S$29 pp", "photo": "https://media.triple.guide/triple-cms/c_limit%2Cf_auto%2Ch_1024%2Cw_1024/94439af8-7a95-43aa-8f27-0e5582799b13.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Ayutthaya+riverside+restaurant"}, {"time": "13:45–14:45", "title": "Chao Sam Phraya National Museum", "desc": "Indoor cultural stop and heat/rain break.", "lat": 14.3533, "lng": 100.5636, "category": "Museum", "price": "Check current fee", "photo": "https://media.triple.guide/triple-cms/c_limit%2Cf_auto%2Ch_1024%2Cw_1024/94439af8-7a95-43aa-8f27-0e5582799b13.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Chao+Sam+Phraya+National+Museum"}, {"time": "15:00–16:15", "title": "Wat Chaiwatthanaram", "desc": "Riverside temple and final team photos.", "lat": 14.3449, "lng": 100.5411, "category": "Sightseeing", "price": "~฿50 entry", "photo": "https://media.triple.guide/triple-cms/c_limit%2Cf_auto%2Ch_1024%2Cw_1024/94439af8-7a95-43aa-8f27-0e5582799b13.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Wat+Chaiwatthanaram"}, {"time": "16:15–16:45", "title": "Ayutthaya Coffee Stop", "desc": "Coffee + team recap before the drive back.", "lat": 14.354, "lng": 100.565, "category": "Coffee", "price": "~฿100–200 / S$4–8", "photo": "https://media.triple.guide/triple-cms/c_limit%2Cf_auto%2Ch_1024%2Cw_1024/94439af8-7a95-43aa-8f27-0e5582799b13.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=coffee+Ayutthaya"}, {"time": "18:30", "title": "Bangkok", "desc": "Return / airport / next hotel drop-off.", "lat": 13.7563, "lng": 100.5018, "category": "End", "price": "—", "photo": "https://www.nimotour.com/upfiles/product/1055914523.jpg", "maps": "https://www.google.com/maps/search/?api=1&query=Bangkok"}]}, "options": {"label": "🔀 Alternatives", "subtitle": "Activity options to swap into the Bangkok day", "theme": "#7c3aed", "stops": [{"time": "Option A", "title": "Go! Thai Cooking School", "desc": "Corporate team cook-off; convenient near Saphan Taksin/Sathorn Pier.", "lat": 13.719, "lng": 100.5155, "category": "Cooking", "price": "Group quote", "photo": "https://excursionmania.com/cdn-cgi/image/quality%3D75%2Cformat%3Dwebp%2Cw%3Dauto%2Ch%3Dauto%2Cfit%3Dscale-down%2Ctrim%3Dborder/https%3A/excursionmania.com/uploads/blog/gallery/963/1736590826.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Go+Thai+Cooking+School+Bangkok"}, {"time": "Option B", "title": "Escape Room Thailand — MBK", "desc": "Competitive puzzle-solving for smaller teams.", "lat": 13.7445, "lng": 100.53, "category": "Escape Room", "price": "Group rate TBC", "photo": "https://excursionmania.com/cdn-cgi/image/quality%3D75%2Cformat%3Dwebp%2Cw%3Dauto%2Ch%3Dauto%2Cfit%3Dscale-down%2Ctrim%3Dborder/https%3A/excursionmania.com/uploads/blog/gallery/963/1736590826.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Escape+Room+Thailand+MBK+Bangkok"}, {"time": "Option C", "title": "Aromdee Art Studio", "desc": "Pottery/ceramics private group workshop.", "lat": 13.691, "lng": 100.605, "category": "Arts & Crafts", "price": "Private quote", "photo": "https://excursionmania.com/cdn-cgi/image/quality%3D75%2Cformat%3Dwebp%2Cw%3Dauto%2Ch%3Dauto%2Cfit%3Dscale-down%2Ctrim%3Dborder/https%3A/excursionmania.com/uploads/blog/gallery/963/1736590826.jpeg", "maps": "https://www.google.com/maps/search/?api=1&query=Aromdee+Art+Studio+Bangkok"}, {"time": "Option D", "title": "ICONSIAM + River Cruise", "desc": "Lower-effort social option with sunset river views.", "lat": 13.7266, "lng": 100.5102, "category": "Scenic", "price": "~฿400–1,400 cruise", "photo": "https://www.greenmindtravel.com/cdn/shop/files/Enchanting_Bangkok_Sunset_River_Cruise__A_Golden_Hour_Delight.jpg?v=1765309482", "maps": "https://www.google.com/maps/search/?api=1&query=ICONSIAM+Bangkok"}, {"time": "Option E", "title": "Rajadamnern Stadium", "desc": "Evening live Muay Thai show.", "lat": 13.7602, "lng": 100.5087, "category": "Show", "price": "Event dependent", "photo": "https://visualthailand.com/wp-content/uploads/2023/11/Stadium-650.png", "maps": "https://www.google.com/maps/search/?api=1&query=Rajadamnern+Stadium+Bangkok"}]}};
+const map=L.map('map',{zoomControl:true});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+
+let currentLayers=[], markers=[];
+function setAccent(c){document.documentElement.style.setProperty('--accent',c)}
+function clearMap(){currentLayers.forEach(x=>map.removeLayer(x));currentLayers=[];markers=[]}
+
+function updateCard(s){
+ document.getElementById('placePhoto').src=s.photo||'';
+ document.getElementById('placePhoto').alt=s.title;
+ document.getElementById('placeCategory').textContent=s.category||'Stop';
+ document.getElementById('placeTitle').textContent=s.title;
+ document.getElementById('placeDesc').textContent=s.time+' • '+s.desc;
+ document.getElementById('placePrice').textContent=s.price ? 'Estimated: '+s.price : '';
+ const a=document.getElementById('placeLink'); a.href=s.maps; a.style.display=s.maps?'inline-block':'none';
+}
+
+function render(key){
+ const d=DAYS[key]; setAccent(d.theme); clearMap();
+ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.key===key));
+ document.getElementById('dayTitle').textContent=d.label;
+ document.getElementById('daySub').textContent=d.subtitle;
+ const tl=document.getElementById('timeline'); tl.innerHTML='';
+ const coords=[];
+
+ d.stops.forEach((s,i)=>{
+   const el=document.createElement('div'); el.className='stop';
+   el.innerHTML=`<div class="time">${s.time}</div><div class="dot">${i+1}</div><div><h3>${s.title}</h3><p>${s.desc}</p><div class="badges"><span class="badge">${s.category}</span><span class="badge">${s.price}</span></div></div>`;
+   tl.appendChild(el);
+
+   const icon=L.divIcon({className:'leaflet-div-icon',html:`<div class="num-icon">${i+1}</div>`,iconSize:[31,31],iconAnchor:[15,15]});
+   const m=L.marker([s.lat,s.lng],{icon}).addTo(map).bindPopup(`<strong>${i+1}. ${s.title}</strong><br>${s.time}`);
+   markers.push(m); currentLayers.push(m); coords.push([s.lat,s.lng]);
+
+   el.onclick=()=>{
+     document.querySelectorAll('.stop').forEach(x=>x.classList.remove('active')); el.classList.add('active');
+     updateCard(s);
+     map.flyTo([s.lat,s.lng],14,{duration:.75});
+     m.openPopup();
+     if(innerWidth<920) document.querySelector('.map-panel').scrollIntoView({behavior:'smooth',block:'start'});
+   };
+ });
+
+ if(coords.length>1){
+   const line=L.polyline(coords,{color:d.theme,weight:4,opacity:.78,dashArray:'9 7'}).addTo(map);
+   currentLayers.push(line); map.fitBounds(line.getBounds(),{padding:[55,55]});
+ } else map.setView(coords[0],13);
+
+ // Default card = first stop, while keeping entire route visible.
+ updateCard(d.stops[0]);
+}
+
+const tabs=document.getElementById('tabs');
+Object.entries(DAYS).forEach(([key,d])=>{
+ const b=document.createElement('button');b.className='tab';b.dataset.key=key;b.textContent=d.label;b.onclick=()=>render(key);tabs.appendChild(b);
+});
+render('dry');
+</script>
+</body>
+</html>
